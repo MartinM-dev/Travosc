@@ -57,8 +57,8 @@
       <LibraryDependencies>wiringPi</LibraryDependencies>
     </Link>
     <RemotePostBuildEvent>
-      <Command>gpio export 17 out ; gpio export 18 out ; gpio export 22 out ; gpio export 27 out ; gpio export 5 in ;  gpio export 6 in</Command>
-      <Message>gpio export 18 out</Message>
+      <Command> gpio export 20 in ;  gpio export 21 in ; gpio export 17 out ; gpio export 18 out ; gpio export 22 out ; gpio export 27 out ; gpio export 5 in ;  gpio export 6 in ; </Command>
+      <Message>les gpio cest de la merde sous visual putain mm</Message>
     </RemotePostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'">
@@ -81,12 +81,12 @@
   </ItemGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
     <RemotePostBuildEvent>
-      <Command>gpio export 17 out ; gpio export 18 out ; gpio export 22 out ; gpio export 27 out ; gpio export 5 in ;  gpio export 6 in</Command>
+      <Command> gpio export 20 in ;  gpio export 21 in ; gpio export 17 out ; gpio export 18 out ; gpio export 22 out ; gpio export 27 out ; gpio export 5 in ;  gpio export 6 in ; </Command>
     </RemotePostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
     <RemotePostBuildEvent>
-      <Message>gpio export 18 out</Message>
+      <Message>les gpio cest de la merde sous visual putain mm</Message>
     </RemotePostBuildEvent>
     <Link>
       <LibraryDependencies>wiringPi</LibraryDependencies>

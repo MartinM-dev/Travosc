@@ -656,20 +656,22 @@ void FlexyStepper::setTargetPositionToStop()
   long decelerationDistance_InSteps;
   
 
-  if(targetPosition_InSteps!= currentPosition_InSteps){
-  
-    //
-    // move the target position so that the motor will begin deceleration now
-    //
+  if (targetPosition_InSteps != currentPosition_InSteps) {
+
+      //
+      // move the target position so that the motor will begin deceleration now
+      //
       decelerationDistance_InSteps = (long)round(
           5E11 / (acceleration_InStepsPerSecondPerSecond * currentStepPeriod_InUS *
               currentStepPeriod_InUS));
 
-      if (directionOfMotion > 0)
+      if (directionOfMotion > 0) {
           setTargetPositionInSteps(currentPosition_InSteps + decelerationDistance_InSteps);
-      else
+      }
+      else {
           setTargetPositionInSteps(currentPosition_InSteps - decelerationDistance_InSteps);
- 
+      }
+
   }
 
 }
