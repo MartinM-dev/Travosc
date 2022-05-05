@@ -1,7 +1,8 @@
 ﻿///include
 
 #include <iostream>
-#include <fstream> // pour l'edition des fichiers de sauvegarde
+#include <thread>       // std::thread
+#include <fstream>		// Edition des fichiers de sauvegarde
 #include <string>
 
 using namespace std;
@@ -28,6 +29,10 @@ using namespace std;
 
  gpio readall : affiche de le tableau des gpio
 
+ gpio -g mode 5 up
+ gpio -g mode 6 up
+ gpio -g mode 20 up
+ gpio -g mode 21 up
 
 */
 
@@ -42,32 +47,43 @@ Driver actuel : tmc2209, calcul (irmsx2.5)/1,9 (courant max 2,5a) ///https://doc
 #include "FlexyStepper.h"
 FlexyStepper stepper;
 
-float stepperMaxSpeed = 250;
-const int stepperSpeedLimit = 500;
-float stepperAcceleration = 250;
-float positionmax = 0;
+float stepperMaxSpeed = 500;		// limite de vitesse normale
+const int stepperSpeedLimit = 750;	// limite de vitesse mode PRO attention DANGER
+float stepperAcceleration = 250;	// accélération
+float positionmax = 0;				// position coté stepper
 
-#include <wiringPi.h> // Pinnage     //gpio export 17 out ; gpio export 18 out ; gpio export 22 out ; gpio export 27 out ; gpio export 5 in ;  gpio export 6 in ;  gpio export 24 in ;  gpio export 25 in
-const int stepPin = 22;
-const int directionPin = 27;
-const int capt1 = 5; // cote stepper 5
-const int capt2 = 6; //cote poulie 6
-const int LED = 17;
-const int manualD = 20; // manual drive 20
-const int manualR = 21; // manual reverse 21
+#include <wiringPi.h> // Pinnage    // ligne de commande dans visualstudio code : gpio export 17 out ; gpio export 18 out ; gpio export 22 out ; gpio export 27 out ; gpio export 5 in ;  gpio export 6 in ;  gpio export 24 in ;  gpio export 25 in
 
-//#define	LED 20
+/*
+j'utilise les n° de pin BCMD car j'utilise les initialisations suivantes : 
+wiringPiSetupGpio (void) This function needs to be called with root privileges.
+wiringPiSetupSys (void) This function doesn't needs to be called with root privileges.
+Référence : http://wiringpi.com/reference/setup/
+*/
 
-int dir = 0; //0=Neutral, 1=Drive, 2=Reverse
+const int stepPin = 22;				// Pin de step
+const int directionPin = 27;		// Pin de direction
+const int capt1 = 5;				// cote stepper 5
+const int capt2 = 6;				// cote poulie 6
+const int LED = 17;					// Led Reset Stepper 17
+const int manualD = 21;				// manual drive 21
+const int manualR = 20;				// manual reverse 20
 
-float position[100] = { };
+int dir = 0;						//direction de chariot 0=Neutral, 1=Drive, 2=Reverse
 
-//calcul du temps qui passe
+float position[100] = { };			// tableau de positions enregistrées
+
+//calcul du temps qui passe pour Reset manuel
 
 time_t a, b;
 
-//////////////////////////////////////////////////////////////////////////////// Reset Position Stepper //////////////////////////////////////////////////////////
+// osc
+int oscPort = 8888 ;				// fonction du changement d'adresse ip et de port non implémentée
+char stepperName[] = "/stepper";	// fonction d'identification du stepper dans l'adressage OSC non implémentéee
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////// Récupération des positions dans le fichier ///////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void getPosition() {
 
@@ -98,6 +114,9 @@ void getPosition() {
 
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////// Enregistremenet des positions dans le fichier ///////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void storePosition() {
 
@@ -119,6 +138,10 @@ void storePosition() {
 		puts("Unable to open and store position.txt \n");
 	}
 }
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////// Reset du stepper ////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void resetPosition() {
 
@@ -154,12 +177,17 @@ void resetPosition() {
 	puts("Ready to go");
 }
 
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////// décompte du temps pour manual reset //////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 void manualReset() {
 	puts("Wait for Manual Reset");
 	time(&a);
 	while (digitalRead(manualD) == LOW && digitalRead(manualR) == LOW) {
 		time(&b);
-		if (difftime(b ,a) > 3) {
+		if (difftime(b, a) > 3) {
 			puts("Launch Manual Reset");
 			resetPosition();
 			break;
@@ -167,74 +195,22 @@ void manualReset() {
 	}
 }
 
-//////////////////////////////////////////////////////////////////////////////// Main //////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////// Thread initialisation socket et get osc ////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-int main(void)
+void getOsc()
 {
-
-	char szHisstname[23];
-	if (0 == gethostname(szHisstname, sizeof(szHisstname))) {
-		printf("hello from %s! \n", szHisstname);
-	}
-	else {
-		printf("who is it ? ");
-	}
-
-	// Récupération des positions storées
-
-	getPosition();
-
-	//initialisation des pin
-
-	wiringPiSetupSys();
-
-	pinMode(LED, OUTPUT);
-	digitalWrite(LED, HIGH);
-	delay(500);
-	digitalWrite(LED, LOW);
-	delay(500);
-
-	//Stepper
-
-	pinMode(stepPin, OUTPUT);
-	pinMode(directionPin, OUTPUT);
-
-	//Capteurs fin de course
-
-	pinMode(capt1, INPUT);// METTRE EN PULLUP
-	pullUpDnControl(capt1, PUD_UP);
-	pinMode(capt2, INPUT);// METTRE EN PULLUP
-	pullUpDnControl(capt2, PUD_UP);
-
-	// Fonctions manuelles
-
-	pinMode(manualD, INPUT);// METTRE EN PULLUP
-	pullUpDnControl(manualD, PUD_UP);
-	pinMode(manualR, INPUT);// METTRE EN PULLUP
-	pullUpDnControl(manualR, PUD_UP);
-
-	//intialisation de stepper
-
-	stepper.connectToPins(stepPin, directionPin);                     //Adressage des pin du stepper
-	stepper.setStepsPerMillimeter(27 * 1);                            //convert Step To mm
-	stepper.setSpeedInMillimetersPerSecond(250.0);                    //Speed in mm/second
-	stepper.setAccelerationInMillimetersPerSecondPerSecond(250.0);    //Accel in mm/second
-
-	resetPosition();                                                   //Reset du Stepper
-
-	stepper.setSpeedInMillimetersPerSecond(100.0);                    //Speed in mm/second
-	stepper.setAccelerationInMillimetersPerSecondPerSecond(100.0);    //Accel in mm/second
-
-	//initialisation socket et osc
+	//
 
 	char buffer[2048]; // declare a 2Kb buffer to read packet data into
 
-	// open a socket to listen for datagrams (i.e. UDP packets) on port 8888
+	// open a socket to listen for datagrams (i.e. UDP packets) on port "oscPort"
 	const int fd = socket(AF_INET, SOCK_DGRAM, 0);
 	fcntl(fd, F_SETFL, O_NONBLOCK); // set the socket to non-blocking
 	struct sockaddr_in sin;
 	sin.sin_family = AF_INET;
-	sin.sin_port = htons(8888);
+	sin.sin_port = htons(oscPort);
 	sin.sin_addr.s_addr = INADDR_ANY;
 	bind(fd, (struct sockaddr*)&sin, sizeof(struct sockaddr_in));
 
@@ -307,8 +283,8 @@ int main(void)
 									val = 250;
 								}
 								stepper.setSpeedInMillimetersPerSecond(stepperMaxSpeed);
-								printf("Speed : %d", val);
-								printf("speed %f \n" , stepper.getCurrentVelocityInMillimetersPerSecond());
+								printf("Speed : %d", val); //stepper.setSpeedInMillimetersPerSecond(stepperMaxSpeed);
+								printf("speed %f \n", stepper.getCurrentVelocityInMillimetersPerSecond());
 							}
 						}
 						else if (!strcmp(tosc_getAddress(&osc), "/Get")) { //
@@ -360,7 +336,83 @@ int main(void)
 				}
 			}
 		}
-		
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////// Main ////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+int main(void)
+{
+	//initialisation des pin http://wiringpi.com/reference/setup/
+
+	//wiringPiSetupGpio();	//implique root privileges
+	wiringPiSetupSys();	//n'implique pas root privileges
+
+	//initialisation de la led et test On Off pour indiquer à l'utilisateur que tout va bien
+
+	pinMode(LED, OUTPUT);
+	digitalWrite(LED, HIGH);
+	delay(500);
+	digitalWrite(LED, LOW);
+	delay(500);
+
+	//Stepper
+
+	pinMode(stepPin, OUTPUT);
+	pinMode(directionPin, OUTPUT);
+
+	//Capteurs fin de course
+
+	pinMode(capt1, INPUT);// METTRE EN PULLUP
+	pullUpDnControl(capt1, PUD_UP);
+	pinMode(capt2, INPUT);// METTRE EN PULLUP
+	pullUpDnControl(capt2, PUD_UP);
+
+	// Fonctions manuelles
+
+	pinMode(manualD, INPUT);// METTRE EN PULLUP
+	pullUpDnControl(manualD, PUD_UP);
+	pinMode(manualR, INPUT);// METTRE EN PULLUP
+	pullUpDnControl(manualR, PUD_UP);
+
+	/* Petit test pas vraiment utile
+	char szHisstname[23];
+	if (0 == gethostname(szHisstname, sizeof(szHisstname))) {
+		printf("hello from %s! \n", szHisstname);
+	}
+	else {
+		printf("who is it ? ");
+	}
+	*/
+
+	// Récupération des positions storées
+
+	getPosition();
+
+	//intialisation de stepper
+
+	stepper.connectToPins(stepPin, directionPin);                     //Adressage des pin du stepper
+	stepper.setStepsPerMillimeter(27 * 1);                            //convert Step To mm
+	stepper.setSpeedInMillimetersPerSecond(250.0);                    //Speed in mm/second
+	stepper.setAccelerationInMillimetersPerSecondPerSecond(250.0);    //Accel in mm/second
+
+	resetPosition();                                                   //Reset du Stepper
+
+	stepper.setSpeedInMillimetersPerSecond(100.0);                    //Speed in mm/second
+	stepper.setAccelerationInMillimetersPerSecondPerSecond(100.0);    //Accel in mm/second
+
+	// initialisation du thread qui écoute le port OSC
+
+	std::thread first(getOsc);
+	first.detach();
+	puts("Thread");
+
+	// c'est parti pour la boucle du programme
+
+	while (true) {
+
 		if (digitalRead(manualD) == LOW) {  // Direct drive 
 
 			stepper.setTargetPositionInMillimeters(positionmax);
@@ -372,7 +424,6 @@ int main(void)
 				}
 				puts("Manual Drive");
 				stepper.processMovement();
-				printf("speed %f", stepper.getCurrentVelocityInMillimetersPerSecond());
 			}
 			stepper.setTargetPositionToStop();
 		}
@@ -387,14 +438,10 @@ int main(void)
 				}
 				puts("Manual Reverse");
 				stepper.processMovement();
-				printf("speed %f", stepper.getCurrentVelocityInMillimetersPerSecond());
 			}
 			stepper.setTargetPositionToStop();
 		}
-
-		printf("speed %f \n",stepper.getCurrentVelocityInMillimetersPerSecond());
-		
+		printf("speed %f \n", stepper.getCurrentVelocityInMillimetersPerSecond());
 		stepper.processMovement(); // execute un step a chaque fois que la boucle s'execute 
-
 	}
 }
